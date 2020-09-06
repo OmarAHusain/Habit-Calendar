@@ -1,5 +1,6 @@
 #include <FastLED.h>
 
+// Define hardware variables
 #define DATA_PIN    13
 #define LED_TYPE    WS2811
 #define COLOR_ORDER GRB
@@ -10,20 +11,20 @@ const int buttonPin = 2;
 #define BRIGHTNESS          100
 #define FRAMES_PER_SECOND  10
 
+// Set global variables and values
 bool gReverseDirection = false;
 int buttonState = 0; 
-int day = 1;
+int day = 0;
 int hue = 100;
 unsigned long newTime;
-unsigned long oldTime;
 unsigned long startTime;
-unsigned long timeLimit = 86400000;
-unsigned long threshold = 600000;
-unsigned long c;
+unsigned long timeLimit = 86400000; // <- sets length of "Day"
+unsigned long threshold = 600000;   // <- sets warning time near end of "Day"
+//unsigned long c;
 bool buttonReady = true;
 bool celebrate = false;
 bool started = false;
-bool down = true;
+bool down = false;
 bool missed = false;
 
 void setup() {
@@ -31,21 +32,24 @@ void setup() {
   delay(3000); // 3 second delay for recovery
   // initialize the pushbutton pin as an input:
   pinMode(buttonPin, INPUT);
+  // Setup LED configurations
   FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   // set master brightness control
   FastLED.setBrightness(BRIGHTNESS);
   // reset LEDs to home state
   reset();
-  oldTime = millis();
+  // Set up serial for logging
   Serial.begin(9600);
-  Serial.print("Program started at: ");
-  Serial.println(oldTime); //prints time since program started
 }
 
 void loop() {
-  // read the state of the pushbutton value:
+  // read the state of the pushbutton value and get the latest time value
   buttonState = digitalRead(buttonPin);
   newTime = millis();
+  
+  // If the day equals total number of LEDs, this means the program has finished
+  // Either celebrate with firework display if no day was missed, otherwise simple fade (in & out) last day
+  // Allow button to be used to reset program 
   if(day == NUM_LEDS){
     if(missed == false){
       Serial.println("FIREWORKS! -------");
@@ -60,21 +64,34 @@ void loop() {
     celebrate = true;
   }
   
-  // check if the pushbutton is pressed.
-  // if it is, the buttonState is HIGH:
+  // Check if the pushbutton is pressed.
+  // if it is, the buttonState is HIGH
+  // Call iteration function 
   if (buttonState == HIGH && buttonReady == true) {
     Serial.print("Button pressed at: ");
     Serial.println(newTime);
     buttonReady = false;
     iteration();
   }
+
+  // If program hasn't started yet, fade in&out LED 0 (the first day) in hue 100 (green)
+  // For each fade in & out, program checks to see if button has been pressed
+  // This means that the button has to be pressed for at least 500ms to ensure it is caught
   if(started == false){
     fade(day, 100);
   }
-  
+
+  // If program has started and not finished
   if(celebrate == false && started == true){
+
+    // If a full day (timelimit) has passed since program was started or since the last day finished
     if(newTime >= startTime + timeLimit){
       Serial.println("Day over");
+
+      // If the button hasn't been pressed then day has been missed
+      // Set new start time for the new day to ensure accurate iteration of day
+      // Set the just passed day to red (hue 0), iterate to the next day and fade the new day as green (hue 100)
+      // Hue set to green, button reconfirmed to be ready and missed variable set as true
       if(buttonReady == true){
         if(day < NUM_LEDS){
           Serial.print("Missed habit today at: ");
@@ -92,6 +109,11 @@ void loop() {
           missed = true;
         }
       }
+
+      // If button was pressed in the just passed day and it isn't the last day
+      // Set new start time for the new day to ensure accurate iteration of day
+      // Iterate to the next day and fade the new day as green (hue 100)
+      // Set button to be ready and Hue set to green
       else{
         if(day < NUM_LEDS){
           Serial.print("Completed habit today at: ");
@@ -110,10 +132,19 @@ void loop() {
       Serial.print("It is now Day ");
       Serial.println(day);
     }
+    
+    // If the day hasn't finished yet
     else{
+      
+      // If the button hasn't been pressed and the day isn't almost finished
+      // Fade the current day as normal green (Hue 100)
       if(buttonReady == true && (newTime-startTime) < (timeLimit-threshold)){
         fade(day, 100);
       }
+
+      // If the button hasn't been pressed and the day is almost finished (set by threshold time)
+      // Fade the current day but slowly change hue from green (Hue 100) to red (Hue 0)
+      // Even after Hue reaches 0 (red), continue to fade in and out as red
       if(buttonReady == true && (newTime-startTime) > (timeLimit-threshold)){
         if(hue > 0){
           hue = hue-10;
@@ -143,8 +174,15 @@ void loop() {
       }
     }
   }
-}
+} 
+// Loop function ends here
 
+// Iteration function is activated when the button is pressed 
+// If the day is 0, this means the program has just started and set's the start time
+// It sets the current day to blue by rolling through the hue until 160 (blue hue) is reached.
+// Hue variable is then set to 100 (green) and then flutter is activated (if not last day)
+// If it is the last day, add to the day counter to activate celebration (delayed by a second to enjoy full blue panel)
+// If button is pressed while celebration is activated, reset function activated
 void iteration(){
   if(day == 0){
     startTime = millis();
@@ -155,23 +193,21 @@ void iteration(){
     FastLED.show();
     FastLED.delay(100/FRAMES_PER_SECOND);
   }
-  Serial.print("Day ");
-  Serial.print(day);
-  Serial.println(" checked");
   hue = 100;
   if(day+1 < NUM_LEDS){
       flutter(day+1);
-  }
-  if(day == NUM_LEDS && celebrate == true){
-    reset();
   }
   if(day == NUM_LEDS-1){
     day++;
     delay(1000);
   }
-  //oldTime = newTime;
+  if(day == NUM_LEDS && celebrate == true){
+    reset();
+  }
 }
 
+// Flutter function creates a flutter effect when the button is pressed
+// Sets all LEDs after the current day to blue, then yellow, then black
 void flutter(int x){
   for(int j = x; j < NUM_LEDS; j++){
     leds[j] = CHSV(160,255,BRIGHTNESS);
@@ -190,6 +226,9 @@ void flutter(int x){
   }
 }
 
+// Reset function for initial power on and completion of habits
+// One by one, sets all LEDs to black, then blue then fades to black
+// Finally resets all global variables
 void reset(){
   Serial.println("------ Reset -------");
   for(int i = 0; i < NUM_LEDS; i++){
@@ -210,19 +249,27 @@ void reset(){
     }
     FastLED.delay(100/FRAMES_PER_SECOND);
   }
+  
+  // Ensures all LEDs are 0 brightness
   for(int i = 0; i < NUM_LEDS; i++){
     leds[i] = CHSV(160,255,0);
     FastLED.show();
   }
+
+  // Reset global variables
   day = 0;
   buttonReady = true;
   celebrate = false;
   started = false;
   missed = false;
-  leds[day] = CHSV(96,255,BRIGHTNESS);
+  
+  //Set day 0 to Green
+  leds[day] = CHSV(96,255,BRIGHTNESS); 
   FastLED.show();
 }
 
+// Fade takes in the day and colour as variables
+// Completes a cycle twice a second 
 void fade(int d, int c){
   if(down == false){
     for(int i = BRIGHTNESS; i > BRIGHTNESS-50; i--){
@@ -242,33 +289,6 @@ void fade(int d, int c){
     }
     down = false;
   }
-  Serial.print("States: buttonReady: "); 
-  Serial.print(buttonReady);
-  Serial.print(" celebrate: "); 
-  Serial.print(celebrate);
-  Serial.print(" started: ");
-  Serial.print(started);
-  Serial.print(" down: ");
-  Serial.println(down);
-}
-
-
-
-void cycle(){
-    for(int i = 0; i < NUM_LEDS; i++){
-    if(i>0){
-      leds[i-1] = CHSV(160,255,BRIGHTNESS);
-    }
-    leds[i] = CHSV(96,255,255);
-    FastLED.show();
-    if(i+1 < NUM_LEDS){
-      flutter(i+1);
-    }
-    FastLED.delay(10000/FRAMES_PER_SECOND);
-  }
-  leds[6] = CHSV(160,255,BRIGHTNESS);
-  FastLED.show();
-  FastLED.delay(10000/FRAMES_PER_SECOND);
 }
 
 // Fire2012 by Mark Kriegsman, July 2012
