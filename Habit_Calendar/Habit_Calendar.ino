@@ -18,8 +18,8 @@ int day = 0;
 int hue = 100;
 unsigned long newTime;
 unsigned long startTime;
-unsigned long timeLimit = 86400000; // <- sets length of "Day"
-unsigned long threshold = 600000;   // <- sets warning time near end of "Day"
+unsigned long timeLimit = 20000;  // 86400000; // <- sets length of "Day"
+unsigned long threshold = 10000; // 600000;   // <- sets warning time near end of "Day"
 //unsigned long c;
 bool buttonReady = true;
 bool celebrate = false;
@@ -212,18 +212,13 @@ void flutter(int x){
   for(int j = x; j < NUM_LEDS; j++){
     leds[j] = CHSV(160,255,BRIGHTNESS);
     FastLED.show();
-    FastLED.delay(1000/FRAMES_PER_SECOND);
+    FastLED.delay(500/FRAMES_PER_SECOND);
   }
   for(int j = x; j < NUM_LEDS; j++){
-    leds[j] = CHSV(64,255,BRIGHTNESS);
+    leds[j] = CHSV(160,255,0);
     FastLED.show();
-    FastLED.delay(1000/FRAMES_PER_SECOND);
-  }
-  for(int j = x; j < NUM_LEDS; j++){
-    leds[j] = CHSV(64,255,0);
-    FastLED.show();
-    FastLED.delay(1000/FRAMES_PER_SECOND);
-  }
+    FastLED.delay(500/FRAMES_PER_SECOND);
+  }  
 }
 
 // Reset function for initial power on and completion of habits
